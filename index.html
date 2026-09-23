@@ -1244,8 +1244,28 @@ async function fetchAPI(url, pogingen = 5) {
   throw fout;
 }
 
+// De setlijst verandert een paar keer per jaar, dus die bewaren we een dag.
+// Bij een storing valt loadSets terug op een verlopen kopie.
+const SETS_CACHE = 'pokecollectie_sets_v1';
+const SETS_CACHE_MS = 24 * 60 * 60 * 1000;
+
+function leesSetsCache(ookVerlopen = false) {
+  try {
+    const ruw = localStorage.getItem(SETS_CACHE);
+    if (!ruw) return null;
+    const { tijd, sets } = JSON.parse(ruw);
+    if (!ookVerlopen && Date.now() - tijd > SETS_CACHE_MS) return null;
+    return sets?.length ? sets : null;
+  } catch { return null; }
+}
+
+function schrijfSetsCache(sets) {
+  try { localStorage.setItem(SETS_CACHE, JSON.stringify({ tijd: Date.now(), sets })); } catch {}
+}
+
 let allSets = [];
 let laatsteSet = null;
+const kaartenCache = {};
 let currentCards = [];
 let editingId = null;
 let _producten = [];
@@ -1348,11 +1368,22 @@ const SERIES_ORDER = [
 ];
 
 async function loadSets() {
+  const cache = leesSetsCache();
+  if (cache) { allSets = cache; renderSets(allSets); return; }
+
   try {
     const data = await fetchAPI(`${API}/sets?orderBy=releaseDate`);
     allSets = data.data || [];
+    schrijfSetsCache(allSets);
     renderSets(allSets);
   } catch(e) {
+    const oud = leesSetsCache(true);
+    if (oud) {
+      allSets = oud;
+      renderSets(allSets);
+      showToast('⚠️ Series uit je opgeslagen kopie geladen', false);
+      return;
+    }
     document.getElementById('sets-container').innerHTML = `
       <div class="no-results">
         <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
@@ -1436,11 +1467,19 @@ async function openSet(setId, setName, total) {
   document.getElementById('current-set-name').textContent = setName;
   document.getElementById('current-set-info').textContent = `${total} kaarten`;
   document.getElementById('card-search').value = '';
+  if (kaartenCache[setId]) {
+    currentCards = kaartenCache[setId];
+    renderCards(currentCards);
+    return;
+  }
+
   document.getElementById('cards-container').innerHTML = '<div class="loading"><div class="spinner"></div>Kaarten laden...</div>';
 
   try {
-    const data = await fetchAPI(`${API}/cards?q=set.id:${setId}&orderBy=number&pageSize=250`);
+    const velden = 'id,name,number,images,tcgplayer,set';
+    const data = await fetchAPI(`${API}/cards?q=set.id:${setId}&orderBy=number&pageSize=250&select=${velden}`);
     currentCards = sortCardsByNumber(data.data || []);
+    kaartenCache[setId] = currentCards;
     renderCards(currentCards);
   } catch(e) {
     document.getElementById('cards-container').innerHTML = `
