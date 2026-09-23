@@ -3,6 +3,14 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
+  if (!process.env.GROQ_API_KEY) {
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'GROQ_API_KEY ontbreekt in de Netlify omgevingsvariabelen' })
+    };
+  }
+
   try {
     const { base64 } = JSON.parse(event.body);
 
@@ -13,8 +21,9 @@ exports.handler = async (event) => {
         'Authorization': 'Bearer ' + process.env.GROQ_API_KEY
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'qwen/qwen3.8-27b',
         max_tokens: 300,
+        reasoning_effort: 'none',
         messages: [{
           role: 'user',
           content: [
@@ -26,6 +35,15 @@ exports.handler = async (event) => {
     });
 
     const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: data.error?.message || ('Groq gaf status ' + response.status) })
+      };
+    }
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -35,6 +53,7 @@ exports.handler = async (event) => {
   } catch (err) {
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: err.message })
     };
   }
