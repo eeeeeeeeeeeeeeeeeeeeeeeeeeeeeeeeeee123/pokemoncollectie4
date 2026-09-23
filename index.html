@@ -1226,7 +1226,26 @@ const API_KEY = ''; // Vul hier je pokemontcg.io API key in (gratis op pokemontc
 const GROQ_API_KEY = ''; // Niet meer nodig - key staat veilig in Netlify
 const API = 'https://api.pokemontcg.io/v2';
 
+// api.pokemontcg.io geeft regelmatig 500/502 terug. Een paar pogingen met
+// oplopende wachttijd vangt dat vrijwel altijd op.
+async function fetchAPI(url, pogingen = 5) {
+  const headers = API_KEY ? { 'X-Api-Key': API_KEY } : {};
+  let fout;
+  for (let i = 0; i < pogingen; i++) {
+    try {
+      const res = await fetch(url, { headers });
+      if (res.ok) return await res.json();
+      fout = new Error('De kaarten-API is tijdelijk onbereikbaar (status ' + res.status + ')');
+    } catch {
+      fout = new Error('Geen verbinding met de kaarten-API');
+    }
+    if (i < pogingen - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
+  }
+  throw fout;
+}
+
 let allSets = [];
+let laatsteSet = null;
 let currentCards = [];
 let editingId = null;
 let _producten = [];
@@ -1330,9 +1349,7 @@ const SERIES_ORDER = [
 
 async function loadSets() {
   try {
-    const headers = API_KEY ? { 'X-Api-Key': API_KEY } : {};
-    const res = await fetch(`${API}/sets?orderBy=releaseDate`, { headers });
-    const data = await res.json();
+    const data = await fetchAPI(`${API}/sets?orderBy=releaseDate`);
     allSets = data.data || [];
     renderSets(allSets);
   } catch(e) {
@@ -1340,7 +1357,8 @@ async function loadSets() {
       <div class="no-results">
         <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
         <div style="font-weight:700;">Kan sets niet laden</div>
-        <div style="font-size:13px;color:var(--gray-400);margin-top:4px;">Controleer je internetverbinding</div>
+        <div style="font-size:13px;color:var(--gray-400);margin-top:4px;">${e.message}</div>
+        <button class="btn-primary" style="margin:16px auto 0;" onclick="loadSets()">Opnieuw proberen</button>
       </div>`;
   }
 }
@@ -1412,6 +1430,7 @@ function sortCardsByNumber(cards) {
 
 // ========== CARDS ==========
 async function openSet(setId, setName, total) {
+  laatsteSet = [setId, setName, total];
   document.getElementById('sets-view').style.display = 'none';
   document.getElementById('cards-view').style.display = 'block';
   document.getElementById('current-set-name').textContent = setName;
@@ -1420,13 +1439,17 @@ async function openSet(setId, setName, total) {
   document.getElementById('cards-container').innerHTML = '<div class="loading"><div class="spinner"></div>Kaarten laden...</div>';
 
   try {
-    const headers = API_KEY ? { 'X-Api-Key': API_KEY } : {};
-    const res = await fetch(`${API}/cards?q=set.id:${setId}&orderBy=number&pageSize=250`, { headers });
-    const data = await res.json();
+    const data = await fetchAPI(`${API}/cards?q=set.id:${setId}&orderBy=number&pageSize=250`);
     currentCards = sortCardsByNumber(data.data || []);
     renderCards(currentCards);
   } catch(e) {
-    document.getElementById('cards-container').innerHTML = '<div class="no-results">⚠️ Kan kaarten niet laden</div>';
+    document.getElementById('cards-container').innerHTML = `
+      <div class="no-results">
+        <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
+        <div style="font-weight:700;">Kan kaarten niet laden</div>
+        <div style="font-size:13px;color:var(--gray-400);margin-top:4px;">${e.message}</div>
+        <button class="btn-primary" style="margin:16px auto 0;" onclick="openSet(...laatsteSet)">Opnieuw proberen</button>
+      </div>`;
   }
 }
 
