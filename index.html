@@ -1480,6 +1480,8 @@ function quickAdd(naam, set, price) {
   document.getElementById('f-notities').value = '';
   document.getElementById('f-conditie').value = 'Near Mint';
   document.getElementById('f-status').value = 'Bewaren';
+  document.getElementById('f-verkoopprijs').value = '';
+  toggleVerkoopprijs();
   editingId = null;
   document.getElementById('modal-title').textContent = 'Kaart toevoegen aan voorraad';
   document.getElementById('modal').classList.add('open');
@@ -1555,6 +1557,8 @@ function openAddModal() {
   ['prijs','inkoop'].forEach(f => document.getElementById('f-'+f).value = '');
   document.getElementById('f-conditie').value = 'Near Mint';
   document.getElementById('f-status').value = 'Bewaren';
+  document.getElementById('f-verkoopprijs').value = '';
+  toggleVerkoopprijs();
   document.getElementById('modal').classList.add('open');
 }
 
@@ -1638,6 +1642,9 @@ async function openCameraModal() {
   document.getElementById('scan-result').style.display = 'none';
   document.getElementById('btn-use').style.display = 'none';
   document.getElementById('btn-snap').style.display = 'flex';
+  document.getElementById('btn-snap').textContent = '📸 Foto maken & scannen';
+  document.getElementById('btn-snap').disabled = false;
+  document.getElementById('scan-overlay').style.display = 'none';
   document.getElementById('scan-frame').style.display = 'block';
   scannedCardData = null;
 
@@ -1670,6 +1677,10 @@ async function snapAndScan() {
   const btn = document.getElementById('btn-snap');
 
   // Take photo
+  if (!video.videoWidth || !video.videoHeight) {
+    showToast('❌ Camera is nog niet klaar, probeer het zo opnieuw', false);
+    return;
+  }
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
@@ -1740,6 +1751,8 @@ function useScannedCard() {
   document.getElementById('f-notities').value = scannedCardData.rarity ? 'Rarity: ' + scannedCardData.rarity : '';
   document.getElementById('f-conditie').value = 'Near Mint';
   document.getElementById('f-status').value = 'Bewaren';
+  document.getElementById('f-verkoopprijs').value = '';
+  toggleVerkoopprijs();
   editingId = null;
   document.getElementById('modal-title').textContent = 'Kaart toevoegen';
   document.getElementById('modal').classList.add('open');
